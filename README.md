@@ -1,6 +1,6 @@
 # SorUngs
-cat << 'EOF' > comandos_utiles.md
-# 📁 Comandos esenciales de Linux con ejemplos
+<details>
+<summary> # 📁 Comandos esenciales de Linux (click para expandir)</summary>
 
 ## 🔍 Navegación y exploración
 
@@ -82,3 +82,4 @@ cat << 'EOF' > comandos_utiles.md
 | `man comando` | Manual del comando. | `man ls` |
 | `exit` | Cierra terminal o script. | `exit` |
 EOF
+</details>

@@ -1,38 +1,85 @@
-# Fotocopiadora Rebelde - Solución con Semáforos
+# Razonamiento Detallado de la Solución: Fotocopiadora Rebelde
 
-![Dinosaurios en la universidad](https://via.placeholder.com/800x400?text=Universidad+de+los+Dinosaurios)
+## 1. Análisis de Requisitos Clave
 
-## 📝 Enunciado del Problema
+Identifiqué cuatro requisitos fundamentales:
 
-En la Universidad de los Dinosaurios existe una fotocopiadora rebelde con comportamiento especial:
+1. **Exclusión mutua**  
+   - *Problema*: La fotocopiadora es un recurso no compartible  
+   - *Solución necesaria*: Mecanismo que garantice acceso único
 
-- **Restricciones**:
-  - Solo un dinosaurio puede usarla a la vez
-  - 2 trabajos tipo B seguidos → 5s de enfriamiento obligatorio
-  - Si hay >3 trabajos B esperando → forzar paso de 1 trabajo A
-  - Acceso exclusivo a la bandeja de trabajos
+2. **Restricción de enfriamiento**  
+   - *Regla*: 2 trabajos B consecutivos → 5s de cooldown obligatorio  
+   - *Reto*: Detectar secuencias sin afectar concurrencia
 
-- **Tipos de trabajo**:
-  - **Tipo A**: Textos teóricos (rápidos)
-  - **Tipo B**: Prácticas con imágenes (lentos, recalientan)
+3. **Prioridad dinámica**  
+   - *Condición*: Si cola_B > 3 y existe cola_A → forzar paso de 1 trabajo A  
+   - *Complejidad*: Balancear justicia vs. prevención de sobrecalentamiento
 
-## 🛠️ Solución Implementada
+4. **Acceso exclusivo a bandeja**  
+   - *Requerimiento*: Operación atómica para colocar trabajos  
+   - *Riesgo*: Condición de carrera en actualización de colas
 
-### 🔒 Semáforos Utilizados
+## 2. Identificación de Secciones Críticas
 
-| Semáforo | Tipo | Función |
-|----------|------|---------|
-| `mutex_fotocopiadora` | Binario | Controla acceso físico a la máquina |
-| `mutex_bandeja` | Binario | Protege la bandeja de trabajos |
-| `sem_trabajoA` | Contador | Trabajos tipo A en espera |
-| `sem_trabajoB` | Contador | Trabajos tipo B en espera |
-| `sem_enfriamiento` | Binario | Controla estado de enfriamiento |
-| `mutex_contadores` | Binario | Protege variables compartidas |
+### Zonas de conflicto potencial:
 
-### 📊 Variables Compartidas
+| Sección Crítica | Riesgo | Consecuencia |
+|-----------------|--------|--------------|
+| Estado fotocopiadora | Race condition | Uso simultáneo |
+| Contadores (A/B) | Inconsistencia | Conteos erróneos |
+| Secuencia trabajos B | Conteo incorrecto | Enfriamientos mal calculados |
+| Bandeja de entrada | Trabajos perdidos | Inanición |
 
-```c
-int contador_trabajosB_seguidos = 0;  // Conteo de B consecutivos
-int trabajosA_espera = 0;             // Cola de trabajos A
-int trabajosB_espera = 0;             // Cola de trabajos B
-int fotocopiadora_ocupada = 0;        // Estado actual
+### Estrategia de protección:
+- **Aislamiento atómico** para cada sección crítica
+- **Minimización** del tiempo en zonas críticas
+- **Jerarquía** de bloqueos para evitar deadlocks
+
+## 3. Diseño de Semáforos
+
+### Semáforos principales y su propósito:
+
+1. **`mutex_fotocopiadora`** (Binario)
+   - *Función*: Garantizar acceso exclusivo al dispositivo físico
+   - *Analogía*: "Llave" de la fotocopiadora
+   - *Implementación*: 
+     ```c
+     sem_init(&mutex_fotocopiadora, 0, 1); // Inicialmente libre
+     ```
+
+2. **`mutex_bandeja`** (Binario)
+   - *Función*: Serializar acceso a la bandeja de entrada
+   - *Importancia*: Previene corrupción de colas
+
+3. **Semáforos de cola** (Contadores)
+   - `sem_trabajoA`: Trabajos tipo A pendientes
+   - `sem_trabajoB`: Trabajos tipo B pendientes
+   - *Mecanismo*: 
+     ```c
+     sem_post(&sem_trabajoA); // Añade a cola A
+     sem_wait(&sem_trabajoB); // Espera en cola B
+     ```
+
+4. **`sem_enfriamiento`** (Binario)
+   - *Comportamiento*:
+     - 1 = Operación normal
+     - 0 = En enfriamiento
+   - *Transición*:
+     ```c
+     sem_wait(&sem_enfriamiento); // Inicia cooldown
+     sleep(5);                   // Espera 5s
+     sem_post(&sem_enfriamiento);// Reactiva
+     ```
+
+5. **`mutex_contadores`** (Binario)
+   - *Protege*:
+     - `contador_trabajosB_seguidos`
+     - `trabajosA_espera`
+     - `trabajosB_espera`
+   - *Patrón*:
+     ```c
+     sem_wait(&mutex_contadores);
+     // Actualizar valores
+     sem_post(&mutex_contadores);
+     ```
